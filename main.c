@@ -47,7 +47,9 @@ typedef struct {
 // In memory representation of the actual map that has been traversed
 Map map[5][5];
 
-void move_bot(Turn_t turn);
+void rotate_bot(Turn_t turn); // Rotates the bot according to the given turn.
+void move_bot();              // Moves the bot ahead by 1 unit.
+
 void update_dir(Turn_t turn) {
   switch (turn) {
   case R:
@@ -71,7 +73,8 @@ void update_dir(Turn_t turn) {
 
 // NOTE: We are currently biasing the straight direction followed by left and
 // then right
-Turn_t handle_cross_intersection(int x, int y, Map *curr_tile) {
+
+Turn_t handle_cross_intersection(Map *curr_tile) {
   switch (curr_dir) {
   case North:
     if (!curr_tile->north_explored) { // Straight
@@ -111,6 +114,148 @@ Turn_t handle_cross_intersection(int x, int y, Map *curr_tile) {
   return S;
 }
 
+Turn_t handle_T_intersection(Map *curr_tile) {
+  switch (curr_tile->dir) {
+  case North:
+    switch (curr_dir) {
+    case North:
+      if (!curr_tile->west_explored) {
+        return L;
+      } else {
+        return R;
+      }
+    case East:
+      if (!curr_tile->east_explored) {
+        return S;
+      } else {
+        return R;
+      }
+    case West:
+      if (!curr_tile->west_explored) {
+        return S;
+      } else {
+        return L;
+      }
+    // This case should not be possible!
+    case South:
+      return S;
+    }
+  case East:
+    switch (curr_dir) {
+    case North:
+      if (!curr_tile->north_explored) {
+        return S;
+      } else {
+        return L;
+      }
+    case East:
+      if (!curr_tile->north_explored) {
+        return L;
+      } else {
+        return R;
+      }
+    // This case should not be possible!
+    case West:
+      return S;
+    case South:
+      if (!curr_tile->south_explored) {
+        return S;
+      } else {
+        return R;
+      }
+    }
+  case South:
+    switch (curr_dir) {
+    // This case should not be possible!
+    case North:
+      return S;
+    case East:
+      if (!curr_tile->east_explored) {
+        return S;
+      } else {
+        return L;
+      }
+    case West:
+      if (!curr_tile->west_explored) {
+        return S;
+      } else {
+        return R;
+      }
+    case South:
+      if (!curr_tile->east_explored) {
+        return L;
+      } else {
+        return R;
+      }
+    }
+  case West:
+    switch (curr_dir) {
+    case North:
+      if (!curr_tile->north_explored) {
+        return S;
+      } else {
+        return R;
+      }
+    // This case should not be possible!
+    case East:
+      return S;
+    case West:
+      if (!curr_tile->south_explored) {
+        return L;
+      } else {
+        return R;
+      }
+    case South:
+      if (!curr_tile->south_explored) {
+        return S;
+      } else {
+        return L;
+      }
+    }
+  }
+}
+
+Turn_t handle_rl_intersection(Map *curr_tile, Turn_t turn1, Turn_t turn2) {
+  switch (curr_tile->dir) {
+  case North:
+    switch (curr_dir) {
+    case North:
+      return turn1;
+    case West:
+      return turn2;
+    default:
+      return S;
+    }
+  case East:
+    switch (curr_dir) {
+    case East:
+      return turn1;
+    case North:
+      return turn2;
+    default:
+      return S;
+    }
+  case South:
+    switch (curr_dir) {
+    case South:
+      return turn1;
+    case East:
+      return turn2;
+    default:
+      return S;
+    }
+  case West:
+    switch (curr_dir) {
+    case West:
+      return turn1;
+    case South:
+      return turn2;
+    default:
+      return S;
+    }
+  }
+}
+
 Turn_t handle_intersection_type(int x, int y, Intersection_t intersection) {
   Map *curr_tile = &map[y][x];
   if (map[y][x].intersection == Unexplored) {
@@ -119,8 +264,8 @@ Turn_t handle_intersection_type(int x, int y, Intersection_t intersection) {
   }
   curr_tile->times_visited++;
 
-  // Update the tile to store that we have visitied the direction we are coming
-  // from!
+  // Update the tile to store that we have visitied the direction we are
+  // coming from!
   switch (curr_dir) {
   case North:
     curr_tile->south_explored = true;
@@ -138,15 +283,15 @@ Turn_t handle_intersection_type(int x, int y, Intersection_t intersection) {
 
   switch (intersection) {
   case Cross:
-    return handle_cross_intersection(x, y, curr_tile);
+    return handle_cross_intersection(curr_tile);
   case T:
-    break;
+    return handle_T_intersection(curr_tile);
   case Right:
-    break;
+    return handle_rl_intersection(curr_tile, R, L);
   case Left:
-    break;
+    return handle_rl_intersection(curr_tile, L, R);
   case Straight:
-    break;
+    return S;
   case DeadEnd:
     return U;
   case End:
@@ -157,18 +302,59 @@ Turn_t handle_intersection_type(int x, int y, Intersection_t intersection) {
     break;
   }
 
+  // This case should never be reachable
   return 0;
 }
 
+void update_map_location(int *x, int *y) {
+  switch (curr_dir) {
+  case North:
+    (*y)++;
+    break;
+  case East:
+    (*x)--;
+    break;
+  case South:
+    (*y)--;
+    break;
+  case West:
+    (*x)++;
+    break;
+  }
+}
+
 int main() {
-  int x, y = 0;
+  int x = 0, y = 0;
   int nextStep;
 
-  while (map[y][x].intersection != End) {
+  while (true) {
     // TODO: Get the next intersection type from the sensors!
-    scanf("Enter next intersetion type: %d", &nextStep);
-    // TODO: Do something with the input!
+    printf("Enter next intersection type: ");
+    scanf("%d", &nextStep);
+    Turn_t turn = handle_intersection_type(x, y, (Intersection_t)nextStep);
+    if (turn == Stop) {
+      break;
+    }
+
+    update_dir(turn);
+    update_map_location(&x, &y);
+    printf("Updating...%d, %d, %d, %d\n", turn, curr_dir, x, y);
   }
+
+  printf("Maze completed!\nFinal Position: %d, %d\n", x, y);
+
+  // for (int i = 0; i < sizeof(map) / sizeof(int); i++) {
+  //   for (int j = 0; i < sizeof(map) / sizeof(int); i++) {
+  //     Map tile = map[i][j];
+  //     printf(
+  //         "dir: %d\tint: %d\tnorth: %d\teast: %d\tsouth: %d\twest: %d\ttimes:
+  //         "
+  //         "%d\n",
+  //         tile.dir, tile.intersection, tile.north_explored,
+  //         tile.east_explored, tile.south_explored, tile.east_explored,
+  //         tile.times_visited);
+  //   }
+  // }
 
   return 0;
 }
